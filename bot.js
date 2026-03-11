@@ -270,7 +270,8 @@ bot.on('message', (msg) => {
   if (isAddress(text)) {
     analyze(text, msg.chat.id);
   } else {
-    bot.sendMessage(msg.chat.id, '⚠️ Send a valid contract address to analyze.');
+    // stay silent for invalid input in private too
+  }
   }
 });
 
