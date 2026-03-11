@@ -46,7 +46,7 @@ async function getEthPrice() {
   try {
     const data = await fetchJSON('https://api.dexscreener.com/latest/dex/pairs/ethereum/0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640');
     if (data?.pair?.priceUsd) {
-      console.log('ETH price from DexScreener pair:', data.pair.priceUsd);
+      console.log('ETH price from DexScreener:', data.pair.priceUsd);
       return parseFloat(data.pair.priceUsd);
     }
   } catch(e) {}
@@ -283,13 +283,6 @@ async function analyze(address, chatId) {
   }
 }
 
-bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id,
-    `👾 *Bundle Launch Analyzer*\n\nPaste any token contract address and I'll fetch everything automatically.\n\n✅ Ethereum  ✅ Base  ✅ BSC  ✅ Solana`,
-    { parse_mode: 'Markdown' }
-  );
-});
-
 bot.on('message', (msg) => {
   if (!msg.text) return;
 
@@ -297,7 +290,7 @@ bot.on('message', (msg) => {
   const chatType = msg.chat.type;
   const isGroup  = chatType === 'group' || chatType === 'supergroup';
 
-  // In groups — ONLY respond to contract addresses, stay silent for everything else
+  // Groups — ONLY respond to contract addresses, ignore everything else silently
   if (isGroup) {
     if (isEVM(text) || isSolana(text)) {
       analyze(text, msg.chat.id);
@@ -305,8 +298,8 @@ bot.on('message', (msg) => {
     return;
   }
 
-  // In private chat
-  if (text.startsWith('/start')) {
+  // Private chat only
+  if (text === '/start') {
     return bot.sendMessage(msg.chat.id,
       `👾 *Bundle Launch Analyzer*\n\nPaste any token contract address and I'll fetch everything automatically.\n\n✅ Ethereum  ✅ Base  ✅ BSC  ✅ Solana`,
       { parse_mode: 'Markdown' }
