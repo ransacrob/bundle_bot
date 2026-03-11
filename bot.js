@@ -33,24 +33,18 @@ function fmt(n) {
 }
 
 function isEVM(addr) { return /^0x[0-9a-fA-F]{40}$/.test(addr); }
-function isSolana(addr) { return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr); }
+function isSolana(addr) { return /^[1-9A-HJ-NP-Za-km-z]{43,44}$/.test(addr); }
+function isAddress(text) { return isEVM(text) || isSolana(text); }
 
 async function getEthPrice() {
   try {
     const data = await fetchJSON('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
-    if (data?.ethereum?.usd) {
-      console.log('ETH price from CoinGecko:', data.ethereum.usd);
-      return data.ethereum.usd;
-    }
+    if (data?.ethereum?.usd) return data.ethereum.usd;
   } catch(e) {}
   try {
     const data = await fetchJSON('https://api.dexscreener.com/latest/dex/pairs/ethereum/0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640');
-    if (data?.pair?.priceUsd) {
-      console.log('ETH price from DexScreener:', data.pair.priceUsd);
-      return parseFloat(data.pair.priceUsd);
-    }
+    if (data?.pair?.priceUsd) return parseFloat(data.pair.priceUsd);
   } catch(e) {}
-  console.log('ETH price fallback: 3000');
   return 3000;
 }
 
@@ -62,10 +56,7 @@ async function getDexData(address) {
 
 async function getLaunchData(address, chainId, pairAddress, ethPrice) {
   const chainNum = CHAIN_IDS[chainId];
-  if (!chainNum || !pairAddress) {
-    console.log('getLaunchData: missing chainNum or pairAddress', chainNum, pairAddress);
-    return null;
-  }
+  if (!chainNum || !pairAddress) return null;
 
   try {
     const syncRes = await fetchJSON(
@@ -77,13 +68,10 @@ async function getLaunchData(address, chainId, pairAddress, ethPrice) {
       `&apikey=${process.env.ETHERSCAN_API_KEY}`
     );
 
-    console.log('Sync events found:', syncRes?.result?.length);
     if (!syncRes?.result?.length) return null;
 
     const firstSync   = syncRes.result[0];
     const launchBlock = parseInt(firstSync.blockNumber, 16);
-    console.log('Launch block:', launchBlock);
-
     const launchSyncs = syncRes.result.filter(s => parseInt(s.blockNumber, 16) === launchBlock);
     const lastSync    = launchSyncs[launchSyncs.length - 1];
 
@@ -104,10 +92,7 @@ async function getLaunchData(address, chainId, pairAddress, ethPrice) {
       `&startblock=0&endblock=999999999&sort=asc&page=1&offset=200` +
       `&apikey=${process.env.ETHERSCAN_API_KEY}`
     );
-    if (!Array.isArray(txRes?.result) || !txRes.result.length) {
-      console.log('No token txs found');
-      return null;
-    }
+    if (!Array.isArray(txRes?.result) || !txRes.result.length) return null;
 
     const decimals = parseInt(txRes.result[0].tokenDecimal) || 18;
 
@@ -117,7 +102,6 @@ async function getLaunchData(address, chainId, pairAddress, ethPrice) {
       `&apikey=${process.env.ETHERSCAN_API_KEY}`
     );
     const totalSupply = parseFloat(supplyRes.result) / Math.pow(10, decimals);
-    console.log('Total supply:', totalSupply, '| ETH price:', ethPrice);
 
     const r0_tok    = Number(initialReserves.r0) / Math.pow(10, decimals);
     const r1_tok    = Number(initialReserves.r1) / Math.pow(10, decimals);
@@ -130,20 +114,13 @@ async function getLaunchData(address, chainId, pairAddress, ethPrice) {
       ? Number(postReserves.r0) / Math.pow(10, decimals)
       : Number(postReserves.r1) / Math.pow(10, decimals);
 
-    console.log('Init ETH reserve:', initEthReserve, '| Init token reserve:', initTokenReserve);
-    console.log('Post ETH reserve:', postEthReserve, '| Post token reserve:', postTokenReserve);
-
     const launchLiqUSD    = initEthReserve * ethPrice;
     const launchPrice     = initTokenReserve > 0 ? launchLiqUSD / initTokenReserve : 0;
     const launchMC        = launchPrice * totalSupply;
-
     const postLiqUSD      = postEthReserve * ethPrice;
     const postBundlePrice = postTokenReserve > 0 ? postLiqUSD / postTokenReserve : 0;
     const postBundleMC    = postBundlePrice * totalSupply;
-
-    const ethSpent = Math.max(0, postEthReserve - initEthReserve);
-
-    console.log('Launch MC:', launchMC, '| Post bundle MC:', postBundleMC);
+    const ethSpent        = Math.max(0, postEthReserve - initEthReserve);
 
     const DEAD = [
       '0x0000000000000000000000000000000000000000',
@@ -166,21 +143,10 @@ async function getLaunchData(address, chainId, pairAddress, ethPrice) {
     const walletCount  = Object.keys(wallets).length;
     const avgWalletPct = walletCount > 0 ? bundledPct / walletCount : 0;
 
-    console.log('Bundle pct:', bundledPct, '| Wallets:', walletCount);
-
     return {
-      launchBlock,
-      launchMC,
-      launchLiqUSD,
-      initEthReserve,
-      postBundleMC,
-      postBundlePrice,
-      postLiqUSD,
-      ethSpent,
-      bundledPct,
-      walletCount,
-      avgWalletPct,
-      txCount: launchTxs.length,
+      launchBlock, launchMC, launchLiqUSD, initEthReserve,
+      postBundleMC, postBundlePrice, postLiqUSD, ethSpent,
+      bundledPct, walletCount, avgWalletPct, txCount: launchTxs.length,
     };
 
   } catch(e) {
@@ -189,20 +155,17 @@ async function getLaunchData(address, chainId, pairAddress, ethPrice) {
   }
 }
 
-async function analyze(address, chatId) {
+async function analyze(address, chatId, messageId) {
   const loadingMsg = await bot.sendMessage(chatId, '🔍 Analyzing token...');
 
   try {
     const [dex, ethPrice] = await Promise.all([getDexData(address), getEthPrice()]);
-    console.log('ETH price fetched:', ethPrice);
 
     if (!dex) {
       return bot.editMessageText('❌ Token not found. Check the address and try again.', {
         chat_id: chatId, message_id: loadingMsg.message_id
       });
     }
-
-    console.log('Chain:', dex.chainId, '| Pair:', dex.pairAddress);
 
     const chainId  = dex.chainId;
     const pairAddr = dex.pairAddress;
@@ -241,13 +204,11 @@ async function analyze(address, chatId) {
         reply += `*At Launch (before bundle):*\n`;
         reply += `💰 MC: ${fmt(launch.launchMC)}\n`;
         reply += `💧 Liquidity: ${fmt(launch.launchLiqUSD)} (${launch.initEthReserve.toFixed(3)} ETH)\n\n`;
-
         reply += `*After Bundle:*\n`;
         reply += `💰 MC: ${fmt(launch.postBundleMC)}\n`;
         reply += `🪙 Price: $${launch.postBundlePrice.toFixed(10)}\n`;
         reply += `💧 Liquidity: ${fmt(launch.postLiqUSD)}\n`;
         reply += `💸 ETH Spent: ${launch.ethSpent.toFixed(3)} ETH\n\n`;
-
         reply += `📦 *Supply Bundled:* ${launch.bundledPct.toFixed(2)}%\n`;
         reply += `🔄 Launch Buys: ${launch.txCount}\n`;
         reply += `👥 Wallets: ${launch.walletCount} | Avg: ${launch.avgWalletPct.toFixed(2)}%\n`;
@@ -257,7 +218,6 @@ async function analyze(address, chatId) {
         else if (launch.bundledPct > 5)  reply += `\n⚠️ Moderate bundle detected`;
         else                              reply += `\n✅ Low bundle`;
       }
-
     } else if (chainId === 'solana') {
       reply += `\n_Bundle data not available for Solana yet_`;
     } else {
@@ -290,23 +250,24 @@ bot.on('message', (msg) => {
   const chatType = msg.chat.type;
   const isGroup  = chatType === 'group' || chatType === 'supergroup';
 
-  // Groups — ONLY respond to contract addresses, ignore everything else silently
   if (isGroup) {
-    if (isEVM(text) || isSolana(text)) {
-      analyze(text, msg.chat.id);
+    // In groups ONLY respond to /check <address>
+    const checkMatch = text.match(/^\/check(?:@\S+)?\s+(\S+)$/i);
+    if (checkMatch && isAddress(checkMatch[1])) {
+      analyze(checkMatch[1], msg.chat.id);
     }
     return;
   }
 
-  // Private chat only
+  // Private chat
   if (text === '/start') {
     return bot.sendMessage(msg.chat.id,
-      `👾 *Bundle Launch Analyzer*\n\nPaste any token contract address and I'll fetch everything automatically.\n\n✅ Ethereum  ✅ Base  ✅ BSC  ✅ Solana`,
+      `👾 *Bundle Launch Analyzer*\n\nPaste any contract address or use /check <address>\n\n✅ Ethereum  ✅ Base  ✅ BSC  ✅ Solana`,
       { parse_mode: 'Markdown' }
     );
   }
 
-  if (isEVM(text) || isSolana(text)) {
+  if (isAddress(text)) {
     analyze(text, msg.chat.id);
   } else {
     bot.sendMessage(msg.chat.id, '⚠️ Send a valid contract address to analyze.');
