@@ -295,9 +295,17 @@ bot.on('message', (msg) => {
 
   const text     = msg.text.trim();
   const chatType = msg.chat.type;
+  const isGroup  = chatType === 'group' || chatType === 'supergroup';
 
-  if (chatType !== 'private' && !isEVM(text) && !isSolana(text)) return;
+  // In groups — ONLY respond to contract addresses, stay silent for everything else
+  if (isGroup) {
+    if (isEVM(text) || isSolana(text)) {
+      analyze(text, msg.chat.id);
+    }
+    return;
+  }
 
+  // In private chat
   if (text.startsWith('/start')) {
     return bot.sendMessage(msg.chat.id,
       `👾 *Bundle Launch Analyzer*\n\nPaste any token contract address and I'll fetch everything automatically.\n\n✅ Ethereum  ✅ Base  ✅ BSC  ✅ Solana`,
@@ -307,7 +315,7 @@ bot.on('message', (msg) => {
 
   if (isEVM(text) || isSolana(text)) {
     analyze(text, msg.chat.id);
-  } else if (chatType === 'private') {
+  } else {
     bot.sendMessage(msg.chat.id, '⚠️ Send a valid contract address to analyze.');
   }
 });
