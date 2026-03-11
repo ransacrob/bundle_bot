@@ -80,7 +80,7 @@ async function getLaunchData(address, chainId, pairAddress, ethPrice) {
     console.log('Sync events found:', syncRes?.result?.length);
     if (!syncRes?.result?.length) return null;
 
-    const firstSync  = syncRes.result[0];
+    const firstSync   = syncRes.result[0];
     const launchBlock = parseInt(firstSync.blockNumber, 16);
     console.log('Launch block:', launchBlock);
 
@@ -119,8 +119,8 @@ async function getLaunchData(address, chainId, pairAddress, ethPrice) {
     const totalSupply = parseFloat(supplyRes.result) / Math.pow(10, decimals);
     console.log('Total supply:', totalSupply, '| ETH price:', ethPrice);
 
-    const r0_tok = Number(initialReserves.r0) / Math.pow(10, decimals);
-    const r1_tok = Number(initialReserves.r1) / Math.pow(10, decimals);
+    const r0_tok    = Number(initialReserves.r0) / Math.pow(10, decimals);
+    const r1_tok    = Number(initialReserves.r1) / Math.pow(10, decimals);
     const tokenIsR0 = Math.abs(r0_tok - totalSupply) < Math.abs(r1_tok - totalSupply);
 
     const initEthReserve   = tokenIsR0 ? Number(initialReserves.r1) / 1e18 : Number(initialReserves.r0) / 1e18;
@@ -232,25 +232,31 @@ async function analyze(address, chatId) {
       reply += `📦 *Bundle Analysis*\n`;
       reply += `🧊 Launch Block: \`${launch.launchBlock}\`\n\n`;
 
-      reply += `*At Launch (before bundle):*\n`;
-      reply += `💰 MC: ${fmt(launch.launchMC)}\n`;
-      reply += `💧 Liquidity: ${fmt(launch.launchLiqUSD)} (${launch.initEthReserve.toFixed(3)} ETH)\n\n`;
+      if (launch.bundledPct === 0 || launch.txCount === 0) {
+        reply += `✅ *This token was not bundled at launch*\n\n`;
+        reply += `*At Launch:*\n`;
+        reply += `💰 MC: ${fmt(launch.launchMC)}\n`;
+        reply += `💧 Liquidity: ${fmt(launch.launchLiqUSD)} (${launch.initEthReserve.toFixed(3)} ETH)\n`;
+      } else {
+        reply += `*At Launch (before bundle):*\n`;
+        reply += `💰 MC: ${fmt(launch.launchMC)}\n`;
+        reply += `💧 Liquidity: ${fmt(launch.launchLiqUSD)} (${launch.initEthReserve.toFixed(3)} ETH)\n\n`;
 
-      reply += `*After Bundle:*\n`;
-      reply += `💰 MC: ${fmt(launch.postBundleMC)}\n`;
-      reply += `🪙 Price: $${launch.postBundlePrice.toFixed(10)}\n`;
-      reply += `💧 Liquidity: ${fmt(launch.postLiqUSD)}\n`;
-      reply += `💸 ETH Spent: ${launch.ethSpent.toFixed(3)} ETH\n\n`;
+        reply += `*After Bundle:*\n`;
+        reply += `💰 MC: ${fmt(launch.postBundleMC)}\n`;
+        reply += `🪙 Price: $${launch.postBundlePrice.toFixed(10)}\n`;
+        reply += `💧 Liquidity: ${fmt(launch.postLiqUSD)}\n`;
+        reply += `💸 ETH Spent: ${launch.ethSpent.toFixed(3)} ETH\n\n`;
 
-      reply += `📦 *Supply Bundled:* ${launch.bundledPct.toFixed(2)}%\n`;
-      reply += `🔄 Launch Buys: ${launch.txCount}\n`;
-      reply += `👥 Wallets: ${launch.walletCount} | Avg: ${launch.avgWalletPct.toFixed(2)}%\n`;
+        reply += `📦 *Supply Bundled:* ${launch.bundledPct.toFixed(2)}%\n`;
+        reply += `🔄 Launch Buys: ${launch.txCount}\n`;
+        reply += `👥 Wallets: ${launch.walletCount} | Avg: ${launch.avgWalletPct.toFixed(2)}%\n`;
 
-      if (launch.bundledPct > 30)      reply += `\n🚨 *HEAVY BUNDLE — Extreme rug risk*`;
-      else if (launch.bundledPct > 15) reply += `\n⚠️ *HIGH BUNDLE — Proceed with caution*`;
-      else if (launch.bundledPct > 5)  reply += `\n⚠️ Moderate bundle detected`;
-      else if (launch.bundledPct > 0)  reply += `\n✅ Low bundle`;
-      else                              reply += `\n✅ No bundle detected at launch`;
+        if (launch.bundledPct > 30)      reply += `\n🚨 *HEAVY BUNDLE — Extreme rug risk*`;
+        else if (launch.bundledPct > 15) reply += `\n⚠️ *HIGH BUNDLE — Proceed with caution*`;
+        else if (launch.bundledPct > 5)  reply += `\n⚠️ Moderate bundle detected`;
+        else                              reply += `\n✅ Low bundle`;
+      }
 
     } else if (chainId === 'solana') {
       reply += `\n_Bundle data not available for Solana yet_`;
@@ -284,11 +290,23 @@ bot.onText(/\/start/, (msg) => {
 });
 
 bot.on('message', (msg) => {
-  if (!msg.text || msg.text.startsWith('/')) return;
-  const text = msg.text.trim();
+  if (!msg.text) return;
+
+  const text     = msg.text.trim();
+  const chatType = msg.chat.type;
+
+  if (chatType !== 'private' && !isEVM(text) && !isSolana(text)) return;
+
+  if (text.startsWith('/start')) {
+    return bot.sendMessage(msg.chat.id,
+      `👾 *Bundle Launch Analyzer*\n\nPaste any token contract address and I'll fetch everything automatically.\n\n✅ Ethereum  ✅ Base  ✅ BSC  ✅ Solana`,
+      { parse_mode: 'Markdown' }
+    );
+  }
+
   if (isEVM(text) || isSolana(text)) {
     analyze(text, msg.chat.id);
-  } else {
+  } else if (chatType === 'private') {
     bot.sendMessage(msg.chat.id, '⚠️ Send a valid contract address to analyze.');
   }
 });
