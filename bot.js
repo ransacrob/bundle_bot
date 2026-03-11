@@ -155,7 +155,7 @@ async function getLaunchData(address, chainId, pairAddress, ethPrice) {
   }
 }
 
-async function analyze(address, chatId, messageId) {
+async function analyze(address, chatId) {
   const loadingMsg = await bot.sendMessage(chatId, '🔍 Analyzing token...');
 
   try {
@@ -251,7 +251,6 @@ bot.on('message', (msg) => {
   const isGroup  = chatType === 'group' || chatType === 'supergroup';
 
   if (isGroup) {
-    // In groups ONLY respond to /check <address>
     const checkMatch = text.match(/^\/check(?:@\S+)?\s+(\S+)$/i);
     if (checkMatch && isAddress(checkMatch[1])) {
       analyze(checkMatch[1], msg.chat.id);
@@ -259,19 +258,16 @@ bot.on('message', (msg) => {
     return;
   }
 
-  // Private chat
+  // Private chat — only respond to /start or valid addresses, silent otherwise
   if (text === '/start') {
     return bot.sendMessage(msg.chat.id,
-      `👾 *Bundle Launch Analyzer*\n\nPaste any contract address or use /check <address>\n\n✅ Ethereum  ✅ Base  ✅ BSC  ✅ Solana`,
+      `👾 *Bundle Launch Analyzer*\n\nUse /check <address> in groups, or paste any contract address here.\n\n✅ Ethereum  ✅ Base  ✅ BSC  ✅ Solana`,
       { parse_mode: 'Markdown' }
     );
   }
 
   if (isAddress(text)) {
     analyze(text, msg.chat.id);
-  } else {
-    // stay silent for invalid input in private too
-  }
   }
 });
 
