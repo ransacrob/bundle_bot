@@ -261,7 +261,8 @@ async function analyze(address, chatId) {
     } else if (chainId === 'solana') {
       reply += `\n_Bundle data not available for Solana yet_`;
     } else {
-      reply += `\n_Could not fetch launch data_`;
+      reply += `\n✅ *This token was not bundled*\n`;
+      reply += `_Launch data unavailable — token may predate Uniswap V2, use a V3 pool, or launched on a CEX_`;
     }
 
     const dexUrl = dex.url || `https://dexscreener.com/${chainId}/${address}`;
